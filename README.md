@@ -3,63 +3,82 @@ Multi-agent pathfinding on procedurally generated mazes using A* augmented with 
 
 # Threat-Aware Path Planning (A* Simulation)
 
-This Python project uses **Pygame** to simulate a procedurally generated maze in which multiple agents navigate using the **A\*** search algorithm. A primary agent (Pacman) plans paths toward goals while dynamically avoiding pursuing agents (ghosts) by incorporating **threat-based costs** into its heuristic.
+This Python project uses **Pygame** to simulate a procedurally generated maze in which multiple agents navigate using the **A\*** search algorithm. A primary agent (Pacman) plans paths toward food while dynamically avoiding pursuing agents (ghosts) by incorporating **threat-based costs** directly into the search process.
 
 ## Features
 
 - Procedural maze generation using DFS backtracking  
-- Additional randomized wall removal to introduce cycles and multiple paths  
-- Graph-based maze representation with wall-aware neighbors  
-- Real-time A\* pathfinding and continuous replanning  
-- Multi-agent pursuit and evasion (Pacman vs ghosts)  
-- Dynamic threat (danger) field influencing path selection  
-- Continuous simulation with emergent behavior  
+- Grid-based maze with explicit wall representation  
+- A\* pathfinding implemented using priority queues (`heapq`)  
+- Node-based search with tracked `g`, `h`, and `f` costs  
+- Multi-agent simulation (Pacman, multiple ghosts, food)  
+- Dynamic danger values influencing Pacman’s decisions  
+- Continuous real-time replanning and visualization using Pygame  
 
 ## How it Works
 
 ### Maze Creation
 
-- The environment is represented as a 2D grid where each cell starts with walls on all four sides.
-- A **Depth-First Search (DFS) backtracking algorithm** is used to generate a *perfect maze* by randomly visiting neighboring cells and removing walls.
-- After the initial maze is created, additional walls are randomly removed between regions to introduce **cycles**, preventing the maze from being strictly tree-like and allowing multiple valid paths between locations.
-- The final result is a fully connected maze with both corridors and loops.
+- The maze is represented as a grid of `Cell` objects.
+- Each cell tracks whether its **top, bottom, left, and right walls** are present.
+- A **Depth-First Search (DFS)** algorithm with an explicit `stack` is used to generate the maze:
+  - A random unvisited neighbor is chosen.
+  - Walls between the current cell and neighbor are removed.
+  - The algorithm backtracks when no unvisited neighbors remain.
+- This guarantees that the maze is **fully connected**, meaning every cell is reachable.
 
 ### Graph Representation
 
-- Each maze cell acts as a node in a graph.
-- Valid neighbors are determined by checking whether walls exist between adjacent cells.
-- This graph structure is used directly by the A\* algorithm for path planning.
+- Each cell corresponds to a node in a graph.
+- Valid neighbors are determined by checking which walls have been removed.
+- Nodes are indexed by `(row, col)` coordinates and stored in dictionaries during search.
+- A dedicated `Node` class is used during A\* search to store:
+  - `g`: cost from the start
+  - `h`: heuristic estimate to the goal
+  - `f = g + h`
+  - `danger`: accumulated threat cost
 
-### Pathfinding with A\*
+### A\* Pathfinding Implementation
 
-- Both Pacman and the ghosts use the **A\*** algorithm to plan paths.
-- The heuristic used is **Manhattan distance**, which is well-suited for grid-based movement.
-- Ghosts compute shortest paths directly toward Pacman.
-- Pacman computes paths toward food while incorporating an additional **danger cost**.
+- A\* search is implemented explicitly using `heapq` as a priority queue.
+- The heuristic function used is **Manhattan distance**, appropriate for grid movement.
+- Open and closed sets are tracked to prevent revisiting nodes.
+- Each step updates neighboring nodes only if a lower-cost path is found.
 
-### Threat-Aware Planning
+### Threat (Danger) Modeling
 
-- Each cell maintains a `danger` value based on its distance from nearby ghosts.
-- Cells closer to ghosts are assigned higher costs.
-- Pacman’s A\* cost function combines:
-  - Distance traveled  
-  - Estimated distance to the goal  
-  - A weighted danger penalty  
-- This causes Pacman to prefer *safer routes*, even if they are longer, and sometimes to stop moving entirely if no safe path exists.
+- Ghost positions are used to compute a **danger value** for each cell.
+- Cells closer to ghosts contribute a higher danger penalty.
+- During A\* expansion, Pacman’s path cost includes:
+  - Movement cost (`g`)
+  - Heuristic distance to food (`h`)
+  - An added danger component derived from nearby ghosts
+- This causes Pacman to:
+  - Prefer longer but safer paths
+  - Avoid corridors dominated by ghosts
+  - Sometimes stop moving if no safe path exists
 
-### Multi-Agent Dynamics
+### Multi-Agent Behavior
 
-- Ghosts periodically recompute paths to chase Pacman.
-- Pacman continuously replans paths in response to:
-  - Ghost movement  
-  - Changes in danger levels  
-  - New food locations  
-- These interactions produce **emergent behaviors**, such as evasive movement, waiting when trapped, or choosing longer but safer paths.
+- **Pacman**, **ghosts**, and **food** are implemented as separate classes.
+- Ghosts continuously recompute paths toward Pacman using A\* without danger penalties.
+- Pacman continuously replans its path toward food as ghost positions change.
+- All agents update and move inside the main Pygame loop, keeping behavior synchronized with rendering.
+
+### Simulation Loop
+
+- The main loop:
+  - Draws the maze, food, Pacman, and ghosts
+  - Updates danger values
+  - Calls each agent’s `chase()` logic
+  - Renders the updated state every frame
+- The simulation is designed to run indefinitely, allowing long-term observation of behavior.
 
 ## Challenges Faced
 
-- Implementing A\* efficiently using priority queues, open/closed sets, and consistent node tracking.
-- Designing a threat-based heuristic that influences behavior without breaking pathfinding correctness.
-- Handling cases where **no valid path exists**, treating them as meaningful outcomes rather than failures.
-- Synchronizing multiple agents with different replanning intervals in a real-time simulation.
-- Balancing simulation speed and visualization clarity in Pygame.
+- Designing a reusable `Node` structure that cleanly supports dynamic costs.
+- Correctly integrating danger penalties into A\* without breaking the algorithm.
+- Handling cases where Pacman cannot find a valid path and treating them as expected outcomes.
+- Coordinating multiple A\* searches per frame while maintaining performance.
+- Debugging real-time path replanning in a continuously evolving environment.
+
